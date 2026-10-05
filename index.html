@@ -71,9 +71,16 @@ input{min-height:50px;padding:11px;background:#080b09e8;color:var(--text);border
    nav button{min-width:76px;height:48px}
  }
  @media (orientation:portrait){
-   .compassCenter{transform:translateY(-48px)}
-   .compassReadout{transform:translateY(-48px)}
+   .compassCenter{top:calc(24px + env(safe-area-inset-top));bottom:auto;height:min(74vw,350px);padding:0;transform:none}
+   .compassReadout{
+     top:calc(24px + env(safe-area-inset-top) + min(74vw,350px) + 18px);
+     bottom:auto;left:0;right:0;transform:none;
+     height:auto;
+   }
    .compassDial{width:min(74vw,350px)}
+   .madeInRussia{
+     bottom:calc(82px + env(safe-area-inset-bottom));
+   }
  }
 </style></head>
 <body>
@@ -90,7 +97,7 @@ input{min-height:50px;padding:11px;background:#080b09e8;color:var(--text);border
   <span class="azimuthLabel" data-a="0" style="--a:0">0°</span><span class="azimuthLabel" data-a="10" style="--a:10">10°</span><span class="azimuthLabel" data-a="20" style="--a:20">20°</span><span class="azimuthLabel" data-a="30" style="--a:30">30°</span><span class="azimuthLabel" data-a="40" style="--a:40">40°</span><span class="azimuthLabel" data-a="50" style="--a:50">50°</span><span class="azimuthLabel" data-a="60" style="--a:60">60°</span><span class="azimuthLabel" data-a="70" style="--a:70">70°</span><span class="azimuthLabel" data-a="80" style="--a:80">80°</span><span class="azimuthLabel" data-a="90" style="--a:90">90°</span><span class="azimuthLabel" data-a="100" style="--a:100">100°</span><span class="azimuthLabel" data-a="110" style="--a:110">110°</span><span class="azimuthLabel" data-a="120" style="--a:120">120°</span><span class="azimuthLabel" data-a="130" style="--a:130">130°</span><span class="azimuthLabel" data-a="140" style="--a:140">140°</span><span class="azimuthLabel" data-a="150" style="--a:150">150°</span><span class="azimuthLabel" data-a="160" style="--a:160">160°</span><span class="azimuthLabel" data-a="170" style="--a:170">170°</span><span class="azimuthLabel" data-a="180" style="--a:180">180°</span><span class="azimuthLabel" data-a="190" style="--a:190">190°</span><span class="azimuthLabel" data-a="200" style="--a:200">200°</span><span class="azimuthLabel" data-a="210" style="--a:210">210°</span><span class="azimuthLabel" data-a="220" style="--a:220">220°</span><span class="azimuthLabel" data-a="230" style="--a:230">230°</span><span class="azimuthLabel" data-a="240" style="--a:240">240°</span><span class="azimuthLabel" data-a="250" style="--a:250">250°</span><span class="azimuthLabel" data-a="260" style="--a:260">260°</span><span class="azimuthLabel" data-a="270" style="--a:270">270°</span><span class="azimuthLabel" data-a="280" style="--a:280">280°</span><span class="azimuthLabel" data-a="290" style="--a:290">290°</span><span class="azimuthLabel" data-a="300" style="--a:300">300°</span><span class="azimuthLabel" data-a="310" style="--a:310">310°</span><span class="azimuthLabel" data-a="320" style="--a:320">320°</span><span class="azimuthLabel" data-a="330" style="--a:330">330°</span><span class="azimuthLabel" data-a="340" style="--a:340">340°</span><span class="azimuthLabel" data-a="350" style="--a:350">350°</span><span class="azimuthLabel" data-a="360" style="--a:360">360°</span><span class="compassCardinal ccN">N</span><span class="compassCardinal ccE">E</span><span class="compassCardinal ccS">S</span><span class="compassCardinal ccW">W</span>
   <div id="homeNeedle" class="compassPointer"></div><div class="center"></div>
 </div></div>
-<div class="compassReadout" style="bottom:92px"><div id="homeClockReadout" class="clockReadout">12 часов</div><div id="homeDirection" class="clockSub">СЕВЕР</div><div id="homeAzimuthReadout" class="azimuthReadout">АЗИМУТ 0°</div><div id="compassStatus" class="compassStatus">КОМПАС: нажми «ВКЛЮЧИТЬ»</div><button class="compassActivate" onclick="requestCompass()">ВКЛЮЧИТЬ КОМПАС</button></div>
+<div class="compassReadout"><div id="homeClockReadout" class="clockReadout">12 часов</div><div id="homeDirection" class="clockSub">СЕВЕР</div><div id="homeAzimuthReadout" class="azimuthReadout">АЗИМУТ 0°</div><div id="compassStatus" class="compassStatus">КОМПАС: нажми «ВКЛЮЧИТЬ»</div><button class="compassActivate" onclick="requestCompass()">ВКЛЮЧИТЬ КОМПАС</button></div>
 </section>
 
 <section id="mapsec">
