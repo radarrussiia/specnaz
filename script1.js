@@ -347,3 +347,59 @@ window.addEventListener('orientationchange',handleViewportChange,{passive:true})
 window.addEventListener('resize',handleViewportChange,{passive:true});
 document.getElementById('placeSearch').addEventListener('keydown',e=>{if(e.key==='Enter'){searchPlace()}});document.getElementById('weatherSearch').addEventListener('input',()=>{clearTimeout(weatherTimer);const q=document.getElementById('weatherSearch').value.trim();weatherTimer=setTimeout(()=>{if(q.length>=3)renderWeatherSuggestions([],q)},450)});document.getElementById('weatherSearch').addEventListener('keydown',e=>{if(e.key==='Enter'){clearTimeout(weatherTimer);searchWeather()}});
 
+
+
+/* =========================
+   РАДАР — тестовый модуль
+   ========================= */
+const RADAR_KEY='specnaz_radar_v1';
+let radarFeed=JSON.parse(localStorage.getItem(RADAR_KEY)||'[]');
+if(!Array.isArray(radarFeed))radarFeed=[];
+let radarDemoTimer=null, radarDemoIndex=0, radarPopupTimer=null;
+const radarDemoMessages=[
+  'Тестовое сообщение №1 — проверка мгновенного появления уведомления.',
+  'Тестовое сообщение №2 — проверка повторного сообщения через 30 секунд.',
+  'Тестовое сообщение №3 — проверка продолжения работы ленты после повторного уведомления.'
+];
+function radarTime(ts){try{return new Date(ts).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}catch(_){return ''}}
+function renderRadarFeed(){
+  const box=document.getElementById('radarFeed');if(!box)return;
+  box.innerHTML=radarFeed.slice(0,30).map(x=>`<div class="radarItem ${x.isNew?'new':''}">
+    <div class="riHead"><span>ЛПР1 • ${esc(x.type||'ИНФОРМАЦИЯ')}</span><span>${radarTime(x.ts)}</span></div>
+    <div class="riText">${esc(x.text||'')}</div>
+  </div>`).join('')||'<div class="small muted">Сообщений пока нет.</div>';
+}
+function saveRadarFeed(){try{localStorage.setItem(RADAR_KEY,JSON.stringify(radarFeed.slice(0,30)))}catch(_){}}
+function showRadarPopup(item){
+  const popup=document.getElementById('radarPopup'),text=document.getElementById('radarPopupText'),meta=document.getElementById('radarPopupMeta');
+  if(!popup||!text||!meta)return;
+  text.textContent=item.text||'Новое сообщение';
+  meta.textContent='Поступило '+radarTime(item.ts)+' · уведомление исчезнет через 30 секунд';
+  popup.classList.remove('show');void popup.offsetWidth;popup.classList.add('show');
+  clearTimeout(radarPopupTimer);
+  radarPopupTimer=setTimeout(hideRadarPopup,30000);
+  const badge=document.getElementById('radarBadge');if(badge)badge.classList.remove('show');
+}
+function hideRadarPopup(){document.getElementById('radarPopup')?.classList.remove('show')}
+function addRadarMessage(text,type='ИНФОРМАЦИЯ'){
+  const item={id:Date.now()+'-'+Math.random().toString(36).slice(2),text:String(text),type,ts:Date.now(),isNew:true};
+  radarFeed.unshift(item);saveRadarFeed();renderRadarFeed();showRadarPopup(item);
+}
+function clearRadarFeed(){radarFeed=[];saveRadarFeed();renderRadarFeed();hideRadarPopup();const s=document.getElementById('radarTestStatus');if(s)s.textContent='Лента очищена.'}
+function stopRadarDemo(){
+  if(radarDemoTimer){clearTimeout(radarDemoTimer);radarDemoTimer=null}
+  const s=document.getElementById('radarTestStatus');if(s)s.textContent='Тест остановлен.';
+}
+function startRadarDemo(){
+  stopRadarDemo();radarDemoIndex=0;
+  const s=document.getElementById('radarTestStatus');if(s)s.textContent='Тест запущен: первое сообщение сейчас, следующие — каждые 30 секунд.';
+  const emit=()=>{
+    if(radarDemoIndex>=radarDemoMessages.length){radarDemoTimer=null;const el=document.getElementById('radarTestStatus');if(el)el.textContent='Тест завершён. Все 3 сообщения прошли.';return}
+    addRadarMessage(radarDemoMessages[radarDemoIndex],radarDemoIndex===0?'ТЕСТ':'ТЕСТ • НОВОЕ');
+    radarDemoIndex++;
+    if(radarDemoIndex<radarDemoMessages.length)radarDemoTimer=setTimeout(emit,30000);else{radarDemoTimer=null;const el=document.getElementById('radarTestStatus');if(el)el.textContent='Последнее тестовое сообщение показано.'}
+  };
+  emit();
+}
+function initRadar(){renderRadarFeed()}
+document.addEventListener('DOMContentLoaded',initRadar);
