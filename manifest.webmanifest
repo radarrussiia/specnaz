@@ -1,6 +1,6 @@
 {
-  "name": "Спецназ",
-  "short_name": "Спецназ",
+  "name": "РАДАР",
+  "short_name": "РАДАР",
   "description": "Персональный полевой помощник.",
   "start_url": "./index.html",
   "scope": "./",
