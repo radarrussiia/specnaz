@@ -117,35 +117,7 @@ input{min-height:50px;padding:11px;background:#080b09e8;color:var(--text);border
 
 @media(max-width:600px){.radarHistory{padding-left:9px;padding-right:9px}.radarHistoryTitle{font-size:17px}}
 </style>
-<style id="specnazRadarFeedUpdateStyle">
-.radarFeedUpdate{
-  width:100%;display:flex;align-items:center;gap:8px;
-  margin:8px 0 10px;padding:9px 11px;
-  border:1px solid rgba(100,170,105,.22);
-  border-radius:8px;background:rgba(6,20,11,.62);
-  color:rgba(220,235,220,.84);font-size:10px;letter-spacing:.07em;
-  cursor:pointer;text-align:left;appearance:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation;
-}
-.radarFeedUpdate:active{transform:scale(.99);background:rgba(20,55,28,.72)}
-.radarFeedDot{
-  width:6px;height:6px;border-radius:50%;
-  background:#76a96f;box-shadow:0 0 7px rgba(118,169,111,.45);
-  flex:0 0 auto;
-}
-.radarFeedUpdateText{white-space:nowrap}
-.radarFeedTime{margin-left:auto;opacity:.58;font-variant-numeric:tabular-nums}
-.radarFeedUpdate.is-refreshing .radarFeedDot{
-  animation:radarFeedPulse .7s ease-in-out infinite;
-}
-.radarFeedUpdate.is-refreshing .radarFeedUpdateText{opacity:.6}
-@keyframes radarFeedPulse{50%{opacity:.35;transform:scale(.72)}}
 
-/* Уведомления */
-#dangerNotifyBtn{position:fixed;right:12px;top:calc(66px + env(safe-area-inset-top));z-index:120;border:1px solid #466346;border-radius:11px;background:#0a160deF;color:#dcebd8;padding:9px 12px;font:800 10px system-ui;letter-spacing:.35px;box-shadow:0 5px 18px #0007}
-#dangerNotifyBtn[aria-pressed="true"]{border-color:#789a65;color:#b9e6a8}
-#dangerNotifyStatus{position:fixed;right:12px;top:calc(108px + env(safe-area-inset-top));z-index:120;max-width:min(88vw,340px);font:11px system-ui;color:#b9c8b6;background:#071009e8;border:1px solid #29382b;border-radius:8px;padding:7px 9px;display:none}
-#dangerNotifyStatus.show{display:block}
-</style>
 </head>
 <body>
 <button id="dangerNotifyBtn" type="button" aria-pressed="false">🔔 ВКЛЮЧИТЬ УВЕДОМЛЕНИЯ</button><div id="dangerNotifyStatus" role="status" aria-live="polite"></div>
@@ -190,11 +162,7 @@ input{min-height:50px;padding:11px;background:#080b09e8;color:var(--text);border
 <section id="radar" class="radarHistory radarSourceFrame">
   <div class="radarHistoryWrap">
     <div class="radarHistoryHead"><div><div class="tag">ИСТОЧНИК</div><div class="radarHistoryTitle">Радар</div><div class="radarHistorySub">ПРЯМОЙ ИСТОЧНИК • БЕЗ УСЛОВНОЙ СХЕМЫ</div></div></div>
-    <button class="radarFeedUpdate" id="radarFeedUpdate" type="button" aria-label="Обновить ленту" onclick="window.refreshRadarPage && window.refreshRadarPage();">
-  <span class="radarFeedDot"></span>
-  <span class="radarFeedUpdateText" id="radarFeedUpdateText">ОБНОВИТЬ ЛЕНТУ</span>
-  <span class="radarFeedTime" id="radarFeedTime">—</span>
-</button>
+
 <div class="radarSourceShell">
       <iframe id="radarSourceFrame" title="Источник радара" src="https://parsertgtovknews.ru/max/map.php" loading="eager" referrerpolicy="no-referrer" allow="fullscreen" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
     </div>
@@ -618,92 +586,31 @@ document.getElementById('placeSearch').addEventListener('keydown',e=>{if(e.key==
    Совместимо со статическим хостингом GitHub Pages. */
 (function(){
   const SOURCE='https://parsertgtovknews.ru/max/map.php';
-  const INTERVAL=5000;
-  let timer=null, busy=false;
+  const INTERVAL=15000; // обновлять источник каждые 15 секунд, пока приложение открыто
+  let timer=null, busy=false, fallback=null;
   const frame=()=>document.getElementById('radarSourceFrame');
-  function status(label,refreshing){
-    const btn=document.getElementById('radarFeedUpdate');
-    const txt=document.getElementById('radarFeedUpdateText');
-    if(btn) btn.classList.toggle('is-refreshing',!!refreshing);
-    if(txt) txt.textContent=label;
-  }
-  function stamp(){const el=document.getElementById('radarFeedTime');if(el)el.textContent=new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});}
+  function status(label,refreshing){ /* ручное управление удалено; обновление выполняется автоматически */ }
+  function stamp(){ /* время обновления не показывается в интерфейсе */ }
   window.refreshRadarPage=function(manual=true){
-    const f=frame();
-    if(!f||busy)return;
-    if(!navigator.onLine||document.visibilityState!=='visible'){
-      if(manual)status('НЕТ СВЯЗИ',false);
-      return;
-    }
-    busy=true; status('ОБНОВЛЕНИЕ…',true);
-    // Обновляем именно встроенную страницу источника, не всё приложение.
-    f.onload=function(){busy=false;stamp();status('ОБНОВИТЬ ЛЕНТУ',false);f.onload=null;};
-    f.onerror=function(){busy=false;status('ОШИБКА ЗАГРУЗКИ · ПОВТОРИТЬ',false);f.onerror=null;};
-    f.src=SOURCE+(SOURCE.includes('?')?'&':'?')+'_cb='+Date.now();
-    setTimeout(()=>{if(busy){busy=false;status('ОБНОВИТЬ ЛЕНТУ',false);}},15000);
+    const f=frame(); if(!f||busy)return;
+    if(!navigator.onLine||document.visibilityState!=='visible'){if(manual)status('НЕТ СВЯЗИ',false);return;}
+    busy=true;status('ОБНОВЛЕНИЕ…',true);
+    clearTimeout(fallback);
+    let settled=false;
+    const done=(label)=>{if(settled)return;settled=true;busy=false;clearTimeout(fallback);stamp();status(label,false);};
+    f.onload=()=>done('ЛЕНТА ОБНОВЛЕНА');
+    f.onerror=()=>done('ОШИБКА · ПОВТОРИТЬ');
+    f.src='https://parsertgtovknews.ru/max/map.php?_cb='+Date.now();
+    fallback=setTimeout(()=>done('ОЖИДАНИЕ ИСТОЧНИКА'),12000);
   };
   function schedule(){clearTimeout(timer);timer=setTimeout(()=>{if(document.visibilityState==='visible'&&navigator.onLine)window.refreshRadarPage(false);schedule();},INTERVAL);}
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&navigator.onLine)window.refreshRadarPage(false);});
   window.addEventListener('online',()=>window.refreshRadarPage(false));
-  document.addEventListener('DOMContentLoaded',()=>{const f=frame();if(f){f.removeAttribute('sandbox');f.setAttribute('referrerpolicy','no-referrer');f.onload=()=>{stamp();status('ОБНОВИТЬ ЛЕНТУ',false);};}schedule();});
-})();
-</script>
+  window.addEventListener('pageshow',()=>{if(document.visibilityState==='visible')window.refreshRadarPage(false);});
+  document.addEventListener('DOMContentLoaded',()=>{const f=frame();if(f){f.removeAttribute('sandbox');f.setAttribute('referrerpolicy','no-referrer');}schedule();});
+})();</script>
 
-<script>
-/* Тихая проверка обновления сайта.
-   Каждые 5 секунд проверяем версию HTML, но не перезагружаем приложение,
-   если опубликованная версия не изменилась. При новой версии выполняем
-   обновление только когда пользователь не вводит текст и не использует видео. */
-(function(){
-  const CHECK_MS = 5000;
-  const BUILD_META = 'meta[name="specnaz-build"]';
-  const currentBuild = document.querySelector(BUILD_META)?.content || '';
-  let checking = false;
-  let pendingReload = false;
-  let lastReload = 0;
 
-  function userIsBusy(){
-    const el = document.activeElement;
-    const typing = el && (el.matches('input, textarea, select, [contenteditable="true"]'));
-    const video = document.querySelector('video');
-    const playingVideo = video && !video.paused && !video.ended;
-    return !!typing || !!playingVideo;
-  }
-  function maybeReload(){
-    if (!pendingReload || document.visibilityState !== 'visible' || userIsBusy()) return;
-    if (Date.now() - lastReload < 60000) return;
-    lastReload = Date.now();
-    window.location.reload();
-  }
-  async function checkSiteVersion(){
-    if (checking || document.visibilityState !== 'visible' || !navigator.onLine) return;
-    checking = true;
-    try {
-      const response = await fetch('./index.html', {
-        method: 'GET',
-        cache: 'no-store',
-        headers: {'X-Specnaz-Site-Check':'1'}
-      });
-      if (!response.ok) return;
-      const html = await response.text();
-      const match = html.match(/<meta\s+name=["']specnaz-build["']\s+content=["']([^"']+)["'][^>]*>/i);
-      const latestBuild = match ? match[1] : '';
-      if (currentBuild && latestBuild && latestBuild !== currentBuild) {
-        pendingReload = true;
-        maybeReload();
-      }
-    } catch (e) {
-      // Ошибка проверки не мешает работе приложения; следующая проверка повторится через 5 секунд.
-    } finally {
-      checking = false;
-    }
-  }
-  setInterval(checkSiteVersion, CHECK_MS);
-  document.addEventListener('visibilitychange', maybeReload);
-  document.addEventListener('focusin', maybeReload);
-  document.addEventListener('focusout', ()=>setTimeout(maybeReload, 250));
-})();
-</script>
 
 <script>
 /* Уведомления о новых сообщениях радара.
