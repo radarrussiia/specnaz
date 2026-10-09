@@ -117,8 +117,8 @@ input{min-height:50px;padding:11px;background:#080b09e8;color:var(--text);border
 </style>
 <style id="specnazRadarFeedUpdateStyle">
 .radarFeedUpdate{
-  width:100%;display:flex;align-items:center;gap:8px;
-  margin:8px 0 10px;padding:9px 11px;
+  width:auto;flex:0 0 auto;display:flex;align-items:center;gap:8px;
+  margin:0;padding:9px 11px;
   border:1px solid rgba(100,170,105,.22);
   border-radius:8px;background:rgba(6,20,11,.62);
   color:rgba(220,235,220,.84);font-size:10px;letter-spacing:.07em;
@@ -130,13 +130,20 @@ input{min-height:50px;padding:11px;background:#080b09e8;color:var(--text);border
   background:#76a96f;box-shadow:0 0 7px rgba(118,169,111,.45);
   flex:0 0 auto;
 }
-.radarFeedUpdateText{white-space:nowrap}
+.radarFeedUpdateText{white-space:nowrap}.radarHistoryHead .radarFeedUpdate{min-height:38px;font-size:9px}.radarHistoryHead .radarFeedTime{font-size:17px;line-height:1;margin-left:2px}@media(max-width:420px){.radarHistoryHead{align-items:flex-start}.radarHistoryHead .radarFeedUpdate{gap:6px;padding:8px;font-size:8px}}
 .radarFeedTime{margin-left:auto;opacity:.58;font-variant-numeric:tabular-nums}
 .radarFeedUpdate.is-refreshing .radarFeedDot{
   animation:radarFeedPulse .7s ease-in-out infinite;
 }
 .radarFeedUpdate.is-refreshing .radarFeedUpdateText{opacity:.6}
 @keyframes radarFeedPulse{50%{opacity:.35;transform:scale(.72)}}
+</style>
+
+<style id="radarExternalLinkStyle">
+.radarHeadActions{display:flex;align-items:center;justify-content:flex-end;gap:7px;flex-wrap:wrap}
+.radarExternalLink{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:9px 11px;border:1px solid rgba(100,170,105,.3);border-radius:8px;background:rgba(6,20,11,.62);color:#c9ddc7;text-decoration:none;font-size:9px;font-weight:800;letter-spacing:.04em;white-space:nowrap;-webkit-tap-highlight-color:transparent}
+.radarExternalLink:active{transform:scale(.99);background:rgba(20,55,28,.72)}
+@media(max-width:460px){.radarHistoryHead{gap:7px}.radarHeadActions{gap:5px}.radarExternalLink{padding:8px 7px;font-size:8px}.radarHistoryHead .radarFeedUpdate{padding:8px 7px}}
 </style>
 </head>
 <body>
@@ -180,7 +187,7 @@ input{min-height:50px;padding:11px;background:#080b09e8;color:var(--text);border
 
 <section id="radar" class="radarHistory radarSourceFrame">
   <div class="radarHistoryWrap">
-    <div class="radarHistoryHead"><div><div class="tag">ИСТОЧНИК</div><div class="radarHistoryTitle">Радар</div><div class="radarHistorySub">ПРЯМОЙ ИСТОЧНИК • БЕЗ УСЛОВНОЙ СХЕМЫ</div></div></div>
+    <div class="radarHistoryHead"><div><div class="tag">ИСТОЧНИК</div><div class="radarHistoryTitle">Радар</div><div class="radarHistorySub">ПРЯМОЙ ИСТОЧНИК • БЕЗ УСЛОВНОЙ СХЕМЫ</div></div><div class="radarHeadActions"><a class="radarExternalLink" href="https://parsertgtovknews.ru/max/map.php" target="_blank" rel="noopener noreferrer" aria-label="Открыть источник радара отдельно">ОТКРЫТЬ ИСТОЧНИК ↗</a></div></div>
 <div class="radarSourceShell">
       <iframe id="radarSourceFrame" title="Источник радара" src="https://parsertgtovknews.ru/max/map.php" loading="eager" referrerpolicy="no-referrer" allow="fullscreen" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
     </div>
@@ -612,34 +619,40 @@ let radarRefreshInProgress=false;
 let radarLastRefresh=0;
 
 window.refreshRadarPage=function(manual=true){
-  // Manual tap means refresh the whole app/site, then load a fresh radar source.
-  if(manual){
-    try {
-      const freshUrl=new URL(window.location.href);
-      freshUrl.searchParams.set('_site_refresh', String(Date.now()));
-      window.location.replace(freshUrl.toString());
-    } catch(err) { window.location.reload(); }
-    return;
-  }
   const frame=document.getElementById('radarSourceFrame');
   const btn=document.getElementById('radarFeedUpdate');
   const text=document.getElementById('radarFeedUpdateText');
+  const time=document.getElementById('radarFeedTime');
   if(!frame || radarRefreshInProgress) return;
-
+  if(!navigator.onLine){
+    if(text) text.textContent='НЕТ СЕТИ';
+    window.setTimeout(()=>{if(text) text.textContent='ОБНОВИТЬ';},2200);
+    return;
+  }
   radarRefreshInProgress=true;
   radarLastRefresh=Date.now();
-  if(btn) btn.classList.add('is-refreshing');
-  if(text) text.textContent=manual ? 'ОБНОВЛЕНИЕ…' : 'АВТООБНОВЛЕНИЕ…';
-
-  // Reload only the radar source inside the iframe, not the whole Specnaz app.
-  // Cache-busting avoids an old cached page being reused.
+  if(btn){btn.classList.add('is-refreshing');btn.disabled=true;}
+  if(text) text.textContent=manual?'ЗАГРУЗКА…':'АВТООБНОВЛЕНИЕ…';
+  if(time) time.textContent='↻';
+  // Перезагружаем только внешний источник в iframe; сама страница приложения,
+  // выбранная карта и остальные разделы не перезапускаются.
   try {
-    frame.src=RADAR_SOURCE_URL+'?_refresh='+Date.now();
+    const freshUrl=new URL(RADAR_SOURCE_URL);
+    freshUrl.searchParams.set('_refresh',String(Date.now()));
+    frame.src=freshUrl.toString();
   } catch(err) {
     radarRefreshInProgress=false;
-    if(btn) btn.classList.remove('is-refreshing');
-    if(text) text.textContent='ОШИБКА ОБНОВЛЕНИЯ';
+    if(btn){btn.classList.remove('is-refreshing');btn.disabled=false;}
+    if(text) text.textContent='ОШИБКА';
+    return;
   }
+  // Некоторые внешние страницы не вызывают load при сетевой ошибке. Снимаем
+  // блокировку по таймауту, чтобы кнопку можно было нажать повторно.
+  window.setTimeout(function(){
+    radarRefreshInProgress=false;
+    if(btn){btn.classList.remove('is-refreshing');btn.disabled=false;}
+    if(text && text.textContent!=='ОШИБКА') text.textContent='ОБНОВИТЬ';
+  },12000);
 };
 
 function scheduleRadarAutoRefresh(){
@@ -662,12 +675,13 @@ function initRadar(){
   // Load a fresh source URL on each app startup.
   try { frame.src=RADAR_SOURCE_URL+'?_refresh='+Date.now(); } catch(e) {}
 
-  // Button uses its inline handler; do not register a second click handler.
+  // Ручная кнопка удалена; автообновление источника сохранено.
 
   frame.addEventListener('load',function(){
     radarRefreshInProgress=false;
     if(btn) btn.classList.remove('is-refreshing');
-    if(text) text.textContent='ОБНОВИТЬ ЛЕНТУ';
+    if(text) text.textContent='ОБНОВИТЬ';
+    if(btn) btn.disabled=false;
     if(time) time.textContent=new Date().toLocaleTimeString('ru-RU');
   });
 
