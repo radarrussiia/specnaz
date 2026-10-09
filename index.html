@@ -111,7 +111,7 @@ input{min-height:50px;padding:11px;background:#080b09e8;color:var(--text);border
 .radarHistory .radarItem .riHead{grid-column:1/-1;display:flex;justify-content:space-between;gap:8px;font-size:10px;color:#829083;font-weight:800}
 .radarHistory .radarItem .riText{margin-top:0;font-size:13px;line-height:1.35;color:#e3e9e1}
 .radarHistory .radarItem .riLocation{font-size:12px;color:#c9d6c7;font-weight:800}
-.radarSourceFrame .radarHistoryWrap{max-width:1100px}.radarSourceShell{flex:1;min-height:0;height:calc(100vh - 150px);border:1px solid #303c31;border-radius:12px;overflow:hidden;background:#111;box-shadow:0 8px 24px #0008}.radarSourceShell iframe{display:block;width:100%;height:100%;border:0;background:#111}@media(max-width:600px){.radarSourceShell{height:calc(100vh - 145px);border-radius:10px}}
+.radarSourceFrame .radarHistoryWrap{max-width:1100px}.radarSourceShell{position:relative;flex:1;min-height:0;height:calc(100vh - 150px);border:1px solid #303c31;border-radius:12px;overflow:hidden;background:#111;box-shadow:0 8px 24px #0008}.radarSourceShell iframe{display:block;width:100%;height:100%;border:0;background:#111}@media(max-width:600px){.radarSourceShell{height:calc(100vh - 145px);border-radius:10px}}
 
 @media(max-width:600px){.radarHistory{padding-left:9px;padding-right:9px}.radarHistoryTitle{font-size:17px}}
 </style>
@@ -606,42 +606,126 @@ window.addEventListener('resize',handleViewportChange,{passive:true});
 document.getElementById('placeSearch').addEventListener('keydown',e=>{if(e.key==='Enter'){searchPlace()}});document.getElementById('weatherSearch').addEventListener('input',()=>{clearTimeout(weatherTimer);const q=document.getElementById('weatherSearch').value.trim();weatherTimer=setTimeout(()=>{if(q.length>=3)renderWeatherSuggestions([],q)},450)});document.getElementById('weatherSearch').addEventListener('keydown',e=>{if(e.key==='Enter'){clearTimeout(weatherTimer);searchWeather()}});
 
 /* =========================
-   РАДАР — прямой источник
+   РАДАР — автообновление источника
+   Важно: источник открыт в cross-origin iframe, поэтому читать отдельные
+   сообщения из его DOM отсюда нельзя. Обновляем только iframe, не всё приложение.
    ========================= */
 const RADAR_SOURCE_URL='https://parsertgtovknews.ru/max/map.php';
+const RADAR_AUTO_REFRESH_MS=15000; // 15 секунд; только когда вкладка видна
+let radarRefreshTimer=null;
+let radarRefreshInProgress=false;
+let radarLastRefresh=0;
+let radarActiveFrame=null;
+let radarStandbyFrame=null;
+let radarLoadTimeout=null;
 
-window.refreshRadarPage=function(){
-  const frame=document.getElementById('radarSourceFrame');
+function radarSetStatus(label, refreshing){
   const btn=document.getElementById('radarFeedUpdate');
   const text=document.getElementById('radarFeedUpdateText');
+  if(btn) btn.classList.toggle('is-refreshing',!!refreshing);
+  if(text) text.textContent=label;
+}
+function radarTimestamp(){
   const time=document.getElementById('radarFeedTime');
-
-  if(!frame) return;
-
-  if(btn) btn.classList.add('is-refreshing');
-  if(text) text.textContent='ОБНОВЛЕНИЕ…';
-
-  // Reload the existing public source and bypass browser cache.
-  frame.src=RADAR_SOURCE_URL+'?_refresh='+Date.now();
-};
-
-function initRadar(){
-  const frame=document.getElementById('radarSourceFrame');
-  const btn=document.getElementById('radarFeedUpdate');
-  const text=document.getElementById('radarFeedUpdateText');
-  const time=document.getElementById('radarFeedTime');
-
-  if(!frame) return;
-
-  if(btn){
-    btn.addEventListener('click',window.refreshRadarPage);
+  if(time) time.textContent=new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+}
+function radarBuildUrl(){
+  const separator=RADAR_SOURCE_URL.includes('?')?'&':'?';
+  return RADAR_SOURCE_URL+separator+'_cb='+Date.now()+'-'+Math.random().toString(36).slice(2,8);
+}
+function radarPrepareFrame(frame, visible){
+  frame.style.position='absolute';
+  frame.style.inset='0';
+  frame.style.width='100%';
+  frame.style.height='100%';
+  frame.style.border='0';
+  frame.style.display='block';
+  frame.style.opacity=visible?'1':'0';
+  frame.style.visibility=visible?'visible':'hidden';
+  frame.style.pointerEvents=visible?'auto':'none';
+  frame.style.transition='opacity .18s ease';
+}
+window.refreshRadarPage=function(manual=true){
+  if(!radarActiveFrame || !radarStandbyFrame || radarRefreshInProgress) return;
+  if(document.visibilityState!=='visible' || !navigator.onLine){
+    if(manual) radarSetStatus('НЕТ СВЯЗИ / ВКЛАДКА СКРЫТА',false);
+    return;
   }
+  radarRefreshInProgress=true;
+  radarLastRefresh=Date.now();
+  radarSetStatus(manual?'ОБНОВЛЕНИЕ…':'ПРОВЕРКА ИСТОЧНИКА…',true);
 
-  frame.addEventListener('load',function(){
-    if(btn) btn.classList.remove('is-refreshing');
-    if(text) text.textContent='ОБНОВИТЬ ЛЕНТУ';
-    if(time) time.textContent=new Date().toLocaleTimeString('ru-RU');
+  // Загружаем свежую страницу во втором, скрытом iframe.
+  // Активный радар остаётся видимым, поэтому нет белого/чёрного мигания.
+  let finished=false;
+  const finish=(success)=>{
+    if(finished) return;
+    finished=true;
+    clearTimeout(radarLoadTimeout);
+    radarStandbyFrame.removeEventListener('load',onLoad);
+    radarStandbyFrame.removeEventListener('error',onError);
+    radarRefreshInProgress=false;
+    if(success){
+      const oldActive=radarActiveFrame;
+      radarActiveFrame=radarStandbyFrame;
+      radarStandbyFrame=oldActive;
+      radarPrepareFrame(radarActiveFrame,true);
+      radarPrepareFrame(radarStandbyFrame,false);
+      radarStandbyFrame.src='about:blank';
+      radarTimestamp();
+      radarSetStatus('ОБНОВИТЬ ЛЕНТУ',false);
+    } else {
+      radarSetStatus('НЕ УДАЛОСЬ ОБНОВИТЬ · ПОВТОРИТЬ',false);
+    }
+  };
+  const onLoad=()=>finish(true);
+  const onError=()=>finish(false);
+  radarStandbyFrame.addEventListener('load',onLoad);
+  radarStandbyFrame.addEventListener('error',onError);
+  radarLoadTimeout=setTimeout(()=>finish(false),12000);
+  try { radarStandbyFrame.src=radarBuildUrl(); }
+  catch(e){ finish(false); }
+};
+function scheduleRadarAutoRefresh(){
+  clearTimeout(radarRefreshTimer);
+  radarRefreshTimer=setTimeout(()=>{
+    if(document.visibilityState==='visible' && navigator.onLine){
+      window.refreshRadarPage(false);
+    }
+    scheduleRadarAutoRefresh();
+  },RADAR_AUTO_REFRESH_MS);
+}
+function initRadar(){
+  const initial=document.getElementById('radarSourceFrame');
+  const shell=document.querySelector('.radarSourceShell');
+  const btn=document.getElementById('radarFeedUpdate');
+  if(!initial || !shell) return;
+
+  shell.style.position='relative';
+  radarActiveFrame=initial;
+  radarPrepareFrame(radarActiveFrame,true);
+
+  radarStandbyFrame=document.createElement('iframe');
+  radarStandbyFrame.title='Резервный кадр радара';
+  radarStandbyFrame.setAttribute('loading','eager');
+  radarStandbyFrame.setAttribute('referrerpolicy','no-referrer');
+  radarStandbyFrame.setAttribute('allow','fullscreen');
+  radarStandbyFrame.setAttribute('sandbox','allow-scripts allow-same-origin allow-forms allow-popups');
+  radarPrepareFrame(radarStandbyFrame,false);
+  shell.appendChild(radarStandbyFrame);
+
+  if(btn) btn.addEventListener('click',()=>window.refreshRadarPage(true));
+  // Отмечаем начальную загрузку, не перезагружая её сразу.
+  initial.addEventListener('load',()=>{radarTimestamp();radarSetStatus('ОБНОВИТЬ ЛЕНТУ',false);},{once:true});
+  window.addEventListener('online',()=>{
+    if(document.visibilityState==='visible' && Date.now()-radarLastRefresh>5000) window.refreshRadarPage(false);
   });
+  document.addEventListener('visibilitychange',()=>{
+    if(document.visibilityState==='visible' && navigator.onLine && Date.now()-radarLastRefresh>RADAR_AUTO_REFRESH_MS){
+      window.refreshRadarPage(false);
+    }
+  });
+  scheduleRadarAutoRefresh();
 }
 document.addEventListener('DOMContentLoaded',initRadar);
 </script>
