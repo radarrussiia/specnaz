@@ -614,129 +614,39 @@ window.addEventListener('orientationchange',handleViewportChange,{passive:true})
 window.addEventListener('resize',handleViewportChange,{passive:true});
 document.getElementById('placeSearch').addEventListener('keydown',e=>{if(e.key==='Enter'){searchPlace()}});document.getElementById('weatherSearch').addEventListener('input',()=>{clearTimeout(weatherTimer);const q=document.getElementById('weatherSearch').value.trim();weatherTimer=setTimeout(()=>{if(q.length>=3)renderWeatherSuggestions([],q)},450)});document.getElementById('weatherSearch').addEventListener('keydown',e=>{if(e.key==='Enter'){clearTimeout(weatherTimer);searchWeather()}});
 
-/* =========================
-   РАДАР — автообновление источника
-   Важно: источник открыт в cross-origin iframe, поэтому читать отдельные
-   сообщения из его DOM отсюда нельзя. Обновляем только iframe, не всё приложение.
-   ========================= */
-const RADAR_SOURCE_URL='https://parsertgtovknews.ru/max/map.php';
-const RADAR_AUTO_REFRESH_MS=5000; // 5 секунд; только когда вкладка видна
-let radarRefreshTimer=null;
-let radarRefreshInProgress=false;
-let radarLastRefresh=0;
-let radarActiveFrame=null;
-let radarStandbyFrame=null;
-let radarLoadTimeout=null;
-
-function radarSetStatus(label, refreshing){
-  const btn=document.getElementById('radarFeedUpdate');
-  const text=document.getElementById('radarFeedUpdateText');
-  if(btn) btn.classList.toggle('is-refreshing',!!refreshing);
-  if(text) text.textContent=label;
-}
-function radarTimestamp(){
-  const time=document.getElementById('radarFeedTime');
-  if(time) time.textContent=new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
-}
-function radarBuildUrl(){
-  const separator=RADAR_SOURCE_URL.includes('?')?'&':'?';
-  return RADAR_SOURCE_URL+separator+'_cb='+Date.now()+'-'+Math.random().toString(36).slice(2,8);
-}
-function radarPrepareFrame(frame, visible){
-  frame.style.position='absolute';
-  frame.style.inset='0';
-  frame.style.width='100%';
-  frame.style.height='100%';
-  frame.style.border='0';
-  frame.style.display='block';
-  frame.style.opacity=visible?'1':'0';
-  frame.style.visibility=visible?'visible':'hidden';
-  frame.style.pointerEvents=visible?'auto':'none';
-  frame.style.transition='opacity .18s ease';
-}
-window.refreshRadarPage=function(manual=true){
-  if(!radarActiveFrame || !radarStandbyFrame || radarRefreshInProgress) return;
-  if(document.visibilityState!=='visible' || !navigator.onLine){
-    if(manual) radarSetStatus('НЕТ СВЯЗИ / ВКЛАДКА СКРЫТА',false);
-    return;
+/* ОТКАТ РАДАРА: простой прямой iframe без sandbox и двойного кадра.
+   Совместимо со статическим хостингом GitHub Pages. */
+(function(){
+  const SOURCE='https://parsertgtovknews.ru/max/map.php';
+  const INTERVAL=5000;
+  let timer=null, busy=false;
+  const frame=()=>document.getElementById('radarSourceFrame');
+  function status(label,refreshing){
+    const btn=document.getElementById('radarFeedUpdate');
+    const txt=document.getElementById('radarFeedUpdateText');
+    if(btn) btn.classList.toggle('is-refreshing',!!refreshing);
+    if(txt) txt.textContent=label;
   }
-  radarRefreshInProgress=true;
-  radarLastRefresh=Date.now();
-  radarSetStatus(manual?'ОБНОВЛЕНИЕ…':'ПРОВЕРКА ИСТОЧНИКА…',true);
-
-  // Загружаем свежую страницу во втором, скрытом iframe.
-  // Активный радар остаётся видимым, поэтому нет белого/чёрного мигания.
-  let finished=false;
-  const finish=(success)=>{
-    if(finished) return;
-    finished=true;
-    clearTimeout(radarLoadTimeout);
-    radarStandbyFrame.removeEventListener('load',onLoad);
-    radarStandbyFrame.removeEventListener('error',onError);
-    radarRefreshInProgress=false;
-    if(success){
-      const oldActive=radarActiveFrame;
-      radarActiveFrame=radarStandbyFrame;
-      radarStandbyFrame=oldActive;
-      radarPrepareFrame(radarActiveFrame,true);
-      radarPrepareFrame(radarStandbyFrame,false);
-      radarStandbyFrame.src='about:blank';
-      radarTimestamp();
-      radarSetStatus('ОБНОВИТЬ ЛЕНТУ',false);
-    } else {
-      radarSetStatus('НЕ УДАЛОСЬ ОБНОВИТЬ · ПОВТОРИТЬ',false);
+  function stamp(){const el=document.getElementById('radarFeedTime');if(el)el.textContent=new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});}
+  window.refreshRadarPage=function(manual=true){
+    const f=frame();
+    if(!f||busy)return;
+    if(!navigator.onLine||document.visibilityState!=='visible'){
+      if(manual)status('НЕТ СВЯЗИ',false);
+      return;
     }
+    busy=true; status('ОБНОВЛЕНИЕ…',true);
+    // Обновляем именно встроенную страницу источника, не всё приложение.
+    f.onload=function(){busy=false;stamp();status('ОБНОВИТЬ ЛЕНТУ',false);f.onload=null;};
+    f.onerror=function(){busy=false;status('ОШИБКА ЗАГРУЗКИ · ПОВТОРИТЬ',false);f.onerror=null;};
+    f.src=SOURCE+(SOURCE.includes('?')?'&':'?')+'_cb='+Date.now();
+    setTimeout(()=>{if(busy){busy=false;status('ОБНОВИТЬ ЛЕНТУ',false);}},15000);
   };
-  const onLoad=()=>finish(true);
-  const onError=()=>finish(false);
-  radarStandbyFrame.addEventListener('load',onLoad);
-  radarStandbyFrame.addEventListener('error',onError);
-  radarLoadTimeout=setTimeout(()=>finish(false),12000);
-  try { radarStandbyFrame.src=radarBuildUrl(); }
-  catch(e){ finish(false); }
-};
-function scheduleRadarAutoRefresh(){
-  clearTimeout(radarRefreshTimer);
-  radarRefreshTimer=setTimeout(()=>{
-    if(document.visibilityState==='visible' && navigator.onLine){
-      window.refreshRadarPage(false);
-    }
-    scheduleRadarAutoRefresh();
-  },RADAR_AUTO_REFRESH_MS);
-}
-function initRadar(){
-  const initial=document.getElementById('radarSourceFrame');
-  const shell=document.querySelector('.radarSourceShell');
-  const btn=document.getElementById('radarFeedUpdate');
-  if(!initial || !shell) return;
-
-  shell.style.position='relative';
-  radarActiveFrame=initial;
-  radarPrepareFrame(radarActiveFrame,true);
-
-  radarStandbyFrame=document.createElement('iframe');
-  radarStandbyFrame.title='Резервный кадр радара';
-  radarStandbyFrame.setAttribute('loading','eager');
-  radarStandbyFrame.setAttribute('referrerpolicy','no-referrer');
-  radarStandbyFrame.setAttribute('allow','fullscreen');
-  radarStandbyFrame.setAttribute('sandbox','allow-scripts allow-same-origin allow-forms allow-popups');
-  radarPrepareFrame(radarStandbyFrame,false);
-  shell.appendChild(radarStandbyFrame);
-
-  if(btn) btn.addEventListener('click',()=>window.refreshRadarPage(true));
-  // Отмечаем начальную загрузку, не перезагружая её сразу.
-  initial.addEventListener('load',()=>{radarTimestamp();radarSetStatus('ОБНОВИТЬ ЛЕНТУ',false);},{once:true});
-  window.addEventListener('online',()=>{
-    if(document.visibilityState==='visible' && Date.now()-radarLastRefresh>5000) window.refreshRadarPage(false);
-  });
-  document.addEventListener('visibilitychange',()=>{
-    if(document.visibilityState==='visible' && navigator.onLine && Date.now()-radarLastRefresh>RADAR_AUTO_REFRESH_MS){
-      window.refreshRadarPage(false);
-    }
-  });
-  scheduleRadarAutoRefresh();
-}
-document.addEventListener('DOMContentLoaded',initRadar);
+  function schedule(){clearTimeout(timer);timer=setTimeout(()=>{if(document.visibilityState==='visible'&&navigator.onLine)window.refreshRadarPage(false);schedule();},INTERVAL);}
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&navigator.onLine)window.refreshRadarPage(false);});
+  window.addEventListener('online',()=>window.refreshRadarPage(false));
+  document.addEventListener('DOMContentLoaded',()=>{const f=frame();if(f){f.removeAttribute('sandbox');f.setAttribute('referrerpolicy','no-referrer');f.onload=()=>{stamp();status('ОБНОВИТЬ ЛЕНТУ',false);};}schedule();});
+})();
 </script>
 
 <script>
