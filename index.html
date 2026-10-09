@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="ru">
 <head>
-<meta name="specnaz-build" content="v2.83-webpush-integrated">
+<meta name="specnaz-build" content="v2.84-argus-map-test">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#0b0e0d">
@@ -60,6 +60,19 @@ input{min-height:50px;padding:11px;background:#080b09e8;color:var(--text);border
 .homeRadarHead{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 11px;border-bottom:1px solid #263127;background:#0b110ce8}.homeRadarSource{font-size:10px;font-weight:900;letter-spacing:.8px;color:#b8c7b6}.homeRadarCount{font-size:9px;color:#7e8c80;white-space:nowrap}.homeRadarFeed{max-height:92px;overflow:auto;padding:7px}.homeRadarItem{padding:7px 8px;border-bottom:1px solid #202920}.homeRadarItem:last-child{border-bottom:0}.homeRadarItem .hriHead{display:flex;justify-content:space-between;gap:8px;font-size:8px;color:#788678;font-weight:900}.homeRadarItem .hriText{margin-top:3px;font-size:11px;line-height:1.3;color:#dce4da}.radarPanelHead{display:flex;align-items:center;justify-content:space-between;gap:12px}.radar24Count{min-width:34px;height:34px;border:1px solid #465445;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:#cbd8c9}.radarItem{padding:11px 12px}.radarFeed{max-height:calc(100vh - 170px);overflow:auto;padding-right:2px}
 @media (max-width:600px){.homeRadarChat{top:calc(7px + env(safe-area-inset-top));width:calc(100vw - 24px)}.homeRadarFeed{max-height:86px}.compassCenter{top:calc(116px + env(safe-area-inset-top));bottom:150px}.compassDial{width:min(55vw,250px)}.compassReadout{bottom:60px}.clockReadout{font-size:20px}.azimuthReadout{font-size:21px}}
 
+
+
+/* Argus Map integration test; legacy map is retained as a fallback. */
+#mapsec{background:#050706}
+.mapProviderBar{position:absolute;z-index:120;top:calc(58px + env(safe-area-inset-top));left:8px;right:8px;display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap;pointer-events:auto}
+.mapProviderBar button{border:1px solid #52634f;border-radius:9px;background:#0a100c;color:#dce6d9;padding:9px 10px;font-size:11px;font-weight:800;letter-spacing:.35px;box-shadow:0 4px 12px #0008}
+.mapProviderBar button.active{background:#263b27;border-color:#8aa17b;color:#fff}
+.mapProviderBar .openArgusBtn{background:#18241a}
+.argusMapPanel,.nativeMapPanel{position:absolute;inset:0;width:100%;height:100%;overflow:hidden}
+.argusMapPanel iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:#101510}
+.argusFrameNote{position:absolute;left:12px;right:12px;bottom:calc(67px + env(safe-area-inset-bottom));z-index:3;padding:8px 10px;border:1px solid #52634f;border-radius:9px;background:#050906df;color:#cbd5c9;font-size:11px;text-align:center;pointer-events:none}
+.nativeMapPanel[hidden]{display:none!important}
+#mapsec.argus-test-mode .mapOverlay,#mapsec.argus-test-mode .mapLayers,#mapsec.argus-test-mode .mapBottom{z-index:5}
 
 </style>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="anonymous">
@@ -137,11 +150,15 @@ input{min-height:50px;padding:11px;background:#080b09e8;color:var(--text);border
 <div class="compassReadout"><div id="homeClockReadout" class="clockReadout">12 часов</div><div id="homeDirection" class="clockSub">СЕВЕР</div><div id="homeAzimuthReadout" class="azimuthReadout">АЗИМУТ 0°</div><div id="compassStatus" class="compassStatus">КОМПАС: нажми «ВКЛЮЧИТЬ»</div><button class="compassActivate" onclick="requestCompass()">ВКЛЮЧИТЬ КОМПАС</button><button id="compassNightToggle" class="compassActivate" type="button" onclick="toggleCompassNight()" aria-pressed="false">НОЧНОЙ РЕЖИМ</button></div>
 </section>
 
-<section id="mapsec">
+<section id="mapsec" class="argus-test-mode">
+<div class="mapProviderBar"><button id="argusProviderBtn" class="active" type="button" onclick="setMapProvider('argus')">ARGUS MAP</button><button id="nativeProviderBtn" type="button" onclick="setMapProvider('native')">СТАРАЯ КАРТА</button></div>
+<div id="argusMapPanel" class="argusMapPanel"><iframe id="argusMapFrame" title="Argus Map внутри Спецназа" src="https://argusmap.online/" loading="eager" referrerpolicy="strict-origin-when-cross-origin" allow="fullscreen; geolocation" ></iframe><div class="argusFrameNote" id="argusFrameNote">Argus Map загружается внутри раздела «КАРТА». Если область останется пустой, внешний сайт может запрещать встраивание.</div></div>
+<div id="nativeMapPanel" class="nativeMapPanel" hidden>
 <div id="onlineMap" class="mapFull"></div>
 <div class="mapOverlay"><div class="mapSearch"><input id="placeSearch" placeholder="Поиск местности"><button class="btn primary" onclick="searchPlace()">НАЙТИ</button></div><div id="searchResult" class="searchResult"></div><div id="mapSuggestions" class="mapSuggestions"></div></div>
 <div class="mapLayers"><span class="mapQuality">КАРТА</span><button id="layerScheme" onclick="setMapLayer('scheme',this)">ДЕТАЛЬ</button><button id="layerTopo" onclick="setMapLayer('topo',this)">ТОПО</button><button id="layerSatellite" class="active" onclick="setMapLayer('satellite',this)">СПУТНИК</button><button id="layerHybrid" onclick="setMapLayer('hybrid',this)">ГИБРИД</button></div>
 <div class="mapBottom"><div class="mapTools"><button onclick="tab('home',document.querySelector('nav button'))" title="Главная" aria-label="Главная">⌂</button><button onclick="document.getElementById('placeSearch').focus()" title="Поиск" aria-label="Поиск">⌕</button><button onclick="toggleMapPointMode()" id="pointModeBtn" title="Поставить точку" aria-label="Поставить точку"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s7-6.2 7-12A7 7 0 1 0 5 9c0 5.8 7 12 7 12Z"/><circle cx="12" cy="9" r="2.5"/></svg></button><button onclick="confirmClearMapPoints()" id="clearPointsBtn" title="Удалить точки" aria-label="Удалить точки"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M9 7V5h6v2M8 10v8M12 10v8M16 10v8M7 7l1 14h8l1-14Z"/></svg></button></div><div class="mapMeasure" id="mapMeasure">ТОЧКИ: 0 · РАССТОЯНИЕ: 0 м</div></div>
+</div>
 </section>
 
 
@@ -179,7 +196,18 @@ const KEY='specnaz_tasks_v21', MAPKEY='specnaz_map_v20';
 let tasks=JSON.parse(localStorage.getItem(KEY)||localStorage.getItem('specnaz_tasks_v20')||'[]');
 if(!Array.isArray(tasks))tasks=[];
 tasks=tasks.map(x=>({t:String(x.t||''),d:!!x.d,date:x.date||'' ,reminded:!!x.reminded}));
-function tab(id,b){document.querySelectorAll('section').forEach(s=>s.classList.remove('show'));document.getElementById(id).classList.add('show');document.querySelectorAll('nav button').forEach(x=>x.classList.remove('active'));if(b)b.classList.add('active');if(id==='mapsec'){if(!onlineMap)initOnlineMap();setTimeout(()=>onlineMap&&onlineMap.resize(),60)}if(id==='weather'&&!document.getElementById('weatherCurrent').innerHTML){renderCachedWeather()}if(id==='tasks')checkTaskReminders()}
+function setMapProvider(provider){
+  const argus=provider==='argus';
+  const ap=document.getElementById('argusMapPanel'),np=document.getElementById('nativeMapPanel');
+  const ab=document.getElementById('argusProviderBtn'),nb=document.getElementById('nativeProviderBtn');
+  if(ap)ap.hidden=!argus;if(np)np.hidden=argus;
+  if(ab)ab.classList.toggle('active',argus);if(nb)nb.classList.toggle('active',!argus);
+  const section=document.getElementById('mapsec');if(section)section.classList.toggle('argus-test-mode',argus);
+  try{localStorage.setItem('specnaz_map_provider',argus?'argus':'native')}catch(_){}
+  if(!argus){if(!onlineMap)initOnlineMap();setTimeout(()=>{if(onlineMap){onlineMap.invalidateSize();onlineMap.resize&&onlineMap.resize()}},120)}
+}
+(function initMapProvider(){let p='argus';try{p=localStorage.getItem('specnaz_map_provider')||'argus'}catch(_){}setMapProvider(p)})();
+function tab(id,b){document.querySelectorAll('section').forEach(s=>s.classList.remove('show'));document.getElementById(id).classList.add('show');document.querySelectorAll('nav button').forEach(x=>x.classList.remove('active'));if(b)b.classList.add('active');if(id==='mapsec'){let p='argus';try{p=localStorage.getItem('specnaz_map_provider')||'argus'}catch(_){}if(p==='native'){if(!onlineMap)initOnlineMap();setTimeout(()=>onlineMap&&onlineMap.resize(),60)}}if(id==='weather'&&!document.getElementById('weatherCurrent').innerHTML){renderCachedWeather()}if(id==='tasks')checkTaskReminders()}
 function save(){localStorage.setItem(KEY,JSON.stringify(tasks));renderTasks()}
 function dateLabel(d){if(!d)return 'Без даты';const [y,m,day]=d.split('-');return new Date(Number(y),Number(m)-1,Number(day)).toLocaleDateString('ru-RU',{weekday:'long',day:'numeric',month:'long'})}
 function openTaskCalendar(){const overlay=document.getElementById('taskCalendarOverlay'),input=document.getElementById('taskCalendarInput'),main=document.getElementById('taskDate');if(!overlay||!input)return;input.value=main?.value||'';overlay.classList.add('show');setTimeout(()=>input.focus(),50)}
