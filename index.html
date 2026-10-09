@@ -611,7 +611,7 @@ document.getElementById('placeSearch').addEventListener('keydown',e=>{if(e.key==
    сообщения из его DOM отсюда нельзя. Обновляем только iframe, не всё приложение.
    ========================= */
 const RADAR_SOURCE_URL='https://parsertgtovknews.ru/max/map.php';
-const RADAR_AUTO_REFRESH_MS=15000; // 15 секунд; только когда вкладка видна
+const RADAR_AUTO_REFRESH_MS=5000; // 5 секунд; только когда вкладка видна
 let radarRefreshTimer=null;
 let radarRefreshInProgress=false;
 let radarLastRefresh=0;

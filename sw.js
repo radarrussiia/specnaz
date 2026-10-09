@@ -1,4 +1,4 @@
-const CACHE_NAME = 'specnaz-shell-v73';
+const CACHE_NAME = 'specnaz-shell-v78-radar-5s';
 const APP_SHELL = [
   './',
   './index.html',
