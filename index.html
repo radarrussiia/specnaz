@@ -181,11 +181,6 @@ input{min-height:50px;padding:11px;background:#080b09e8;color:var(--text);border
 <section id="radar" class="radarHistory radarSourceFrame">
   <div class="radarHistoryWrap">
     <div class="radarHistoryHead"><div><div class="tag">ИСТОЧНИК</div><div class="radarHistoryTitle">Радар</div><div class="radarHistorySub">ПРЯМОЙ ИСТОЧНИК • БЕЗ УСЛОВНОЙ СХЕМЫ</div></div></div>
-    <button class="radarFeedUpdate" id="radarFeedUpdate" type="button" aria-label="Обновить ленту" onclick="window.refreshRadarPage && window.refreshRadarPage();">
-  <span class="radarFeedDot"></span>
-  <span class="radarFeedUpdateText" id="radarFeedUpdateText">ОБНОВИТЬ ЛЕНТУ</span>
-  <span class="radarFeedTime" id="radarFeedTime">—</span>
-</button>
 <div class="radarSourceShell">
       <iframe id="radarSourceFrame" title="Источник радара" src="https://parsertgtovknews.ru/max/map.php" loading="eager" referrerpolicy="no-referrer" allow="fullscreen" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
     </div>
@@ -617,6 +612,15 @@ let radarRefreshInProgress=false;
 let radarLastRefresh=0;
 
 window.refreshRadarPage=function(manual=true){
+  // Manual tap means refresh the whole app/site, then load a fresh radar source.
+  if(manual){
+    try {
+      const freshUrl=new URL(window.location.href);
+      freshUrl.searchParams.set('_site_refresh', String(Date.now()));
+      window.location.replace(freshUrl.toString());
+    } catch(err) { window.location.reload(); }
+    return;
+  }
   const frame=document.getElementById('radarSourceFrame');
   const btn=document.getElementById('radarFeedUpdate');
   const text=document.getElementById('radarFeedUpdateText');
@@ -655,8 +659,10 @@ function initRadar(){
   const text=document.getElementById('radarFeedUpdateText');
   const time=document.getElementById('radarFeedTime');
   if(!frame) return;
+  // Load a fresh source URL on each app startup.
+  try { frame.src=RADAR_SOURCE_URL+'?_refresh='+Date.now(); } catch(e) {}
 
-  if(btn) btn.addEventListener('click',function(){ window.refreshRadarPage(true); });
+  // Button uses its inline handler; do not register a second click handler.
 
   frame.addEventListener('load',function(){
     radarRefreshInProgress=false;
@@ -690,6 +696,8 @@ if ('serviceWorker' in navigator) {
   });
 }
 </script>
+
+
 
 </body></html>
 <style>
